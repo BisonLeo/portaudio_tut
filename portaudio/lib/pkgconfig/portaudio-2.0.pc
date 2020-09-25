@@ -1,0 +1,12 @@
+prefix=/arkai/proj_users/justin/portaudio/bin
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: PortAudio
+Description: Portable audio I/O
+Requires:
+Version: 19
+
+Libs: -L${libdir} -lportaudio  -ljack -lasound -lm -lpthread
+Cflags: -I${includedir} 
