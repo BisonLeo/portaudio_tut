@@ -19,11 +19,16 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/portaudio_src EXCLUDE_FROM_ALL)
 add_executable(pa_devs pa_devs.c)
 TARGET_LINK_LIBRARIES(pa_devs portaudio_static)
 
-add_executable(sine paex_sine_c++.cpp
-    ${CMAKE_SOURCE_DIR}/common/pa_ringbuffer.c)
 include_directories(${CMAKE_SOURCE_DIR}/common)
+add_executable(sine paex_sine_c++.cpp)
+add_executable(record paex_record.c)
+add_executable(record_file paex_record_file.c)
+
+
 # target_include_directories(pablio ${CMAKE_SOURCE_DIR}/common)
 TARGET_LINK_LIBRARIES(sine portaudio_static)
+TARGET_LINK_LIBRARIES(record portaudio_static)
+TARGET_LINK_LIBRARIES(record_file portaudio_static)
 
 # other commands like 'copy_directory'
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
