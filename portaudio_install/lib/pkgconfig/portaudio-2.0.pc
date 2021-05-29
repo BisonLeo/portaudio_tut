@@ -1,4 +1,4 @@
-prefix=C:/summer2020/portaudio_tut/portaudio_install
+prefix=E:/summer2020/portaudio_tut/portaudio_install
 exec_prefix=${prefix}
 libdir=${prefix}/lib
 includedir=${prefix}/include
