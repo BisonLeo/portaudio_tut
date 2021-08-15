@@ -1207,6 +1207,8 @@ static BOOL IsWindowsVersionOrGreater(WORD wMajorVersion, WORD wMinorVersion, WO
 }
 #endif
 // Get Windows version
+// note: We are trying to get Windows version starting from Windows Vista. Earlier OS versions
+//       will fall into WINDOWS_UNKNOWN case.
 static EWindowsVersion GetWindowsVersion()
 {
 #ifndef PA_WINRT
@@ -1229,14 +1231,14 @@ static EWindowsVersion GetWindowsVersion()
         {
             OSVERSIONINFOW ver = { sizeof(OSVERSIONINFOW), 0, 0, 0, 0, {0} };
 
-            PRINT(("WASAPI: getting Windows version with RtlGetVersion()\n"));
-
             if (fnRtlGetVersion(&ver) == NTSTATUS_SUCCESS)
             {
                 dwMajorVersion = ver.dwMajorVersion;
                 dwMinorVersion = ver.dwMinorVersion;
                 dwBuild        = ver.dwBuildNumber;
             }
+            
+            PRINT(("WASAPI: getting Windows version with RtlGetVersion(): major=%d, minor=%d, build=%d\n", dwMajorVersion, dwMinorVersion, dwBuild));
         }
 
         #undef NTSTATUS_SUCCESS
@@ -1249,17 +1251,15 @@ static EWindowsVersion GetWindowsVersion()
 
             if ((fnGetVersion = (LPFN_GETVERSION)GetProcAddress(GetModuleHandleA("kernel32"), "GetVersion")) != NULL)
             {
-                DWORD dwVersion;
-
-                PRINT(("WASAPI: getting Windows version with GetVersion()\n"));
-
-                dwVersion = fnGetVersion();
+                DWORD dwVersion = fnGetVersion();
 
                 dwMajorVersion = (DWORD)(LOBYTE(LOWORD(dwVersion)));
                 dwMinorVersion = (DWORD)(HIBYTE(LOWORD(dwVersion)));
 
                 if (dwVersion < 0x80000000)
                     dwBuild = (DWORD)(HIWORD(dwVersion));
+                
+                PRINT(("WASAPI: getting Windows version with GetVersion(): major=%d, minor=%d, build=%d\n", dwMajorVersion, dwMinorVersion, dwBuild));
             }
         }
 
@@ -2120,6 +2120,8 @@ static PaError CreateDeviceList(PaWasapiHostApiRepresentation *paWasapi, PaHostA
     UINT32 i;
     WCHAR *defaultRenderId = NULL;
     WCHAR *defaultCaptureId = NULL;
+    UINT renderCount;
+    UINT devIndex;
 #ifndef PA_WINRT
     HRESULT hr;
     IMMDeviceCollection *pEndPoints = NULL;
@@ -2175,6 +2177,19 @@ static PaError CreateDeviceList(PaWasapiHostApiRepresentation *paWasapi, PaHostA
             IF_FAILED_INTERNAL_ERROR_JUMP(hr, result, error);
         }
     }
+    hr = IMMDeviceEnumerator_EnumAudioEndpoints(pEnumerator, eRender, DEVICE_STATE_ACTIVE, &pEndPoints);
+    // We need to set the result to a value otherwise we will return paNoError
+    	// [IF_FAILED_JUMP(hResult, error);]
+    IF_FAILED_INTERNAL_ERROR_JUMP(hr, result, error);
+    
+    hr = IMMDeviceCollection_GetCount(pEndPoints, &renderCount);
+    	// We need to set the result to a value otherwise we will return paNoError
+    	// [IF_FAILED_JUMP(hResult, error);]
+    IF_FAILED_INTERNAL_ERROR_JUMP(hr, result, error);
+    
+    SAFE_RELEASE(pEndPoints);
+    pEndPoints = NULL;
+    
 
     // Get all currently active devices
     hr = IMMDeviceEnumerator_EnumAudioEndpoints(pEnumerator, eAll, DEVICE_STATE_ACTIVE, &pEndPoints);
@@ -2183,6 +2198,7 @@ static PaError CreateDeviceList(PaWasapiHostApiRepresentation *paWasapi, PaHostA
     // Get device count
     hr = IMMDeviceCollection_GetCount(pEndPoints, &paWasapi->deviceCount);
     IF_FAILED_INTERNAL_ERROR_JUMP(hr, result, error);
+    paWasapi->deviceCount += renderCount;
 #else
     WinRT_GetDefaultDeviceId(defaultRender.id, STATIC_ARRAY_SIZE(defaultRender.id) - 1, eRender);
     defaultRenderId = defaultRender.id;
@@ -2241,7 +2257,7 @@ static PaError CreateDeviceList(PaWasapiHostApiRepresentation *paWasapi, PaHostA
     }
 
     // Fill WASAPI device info
-    for (i = 0; i < paWasapi->deviceCount; ++i)
+    for (devIndex = 0, i = 0; i < paWasapi->deviceCount; ++i, ++devIndex)
     {
         PaDeviceInfo *deviceInfo = &deviceInfoArray[i];
 
@@ -2250,7 +2266,7 @@ static PaError CreateDeviceList(PaWasapiHostApiRepresentation *paWasapi, PaHostA
 
         FillBaseDeviceInfo(deviceInfo, hostApiIndex);
 
-        if ((result = FillDeviceInfo(paWasapi, pEndPoints, i, defaultRenderId, defaultCaptureId,
+        if ((result = FillDeviceInfo(paWasapi, pEndPoints, devIndex, defaultRenderId, defaultCaptureId,
             deviceInfo, &paWasapi->devInfo[i]
         #ifdef PA_WINRT
             , &deviceListContext
@@ -2264,6 +2280,41 @@ static PaError CreateDeviceList(PaWasapiHostApiRepresentation *paWasapi, PaHostA
 
         hostApi->deviceInfos[i] = deviceInfo;
         ++hostApi->info.deviceCount;
+
+        if (paWasapi->devInfo[i].flow == eRender)
+        {
+            char* deviceName;
+            UINT deviceNameLen;
+            
+            memcpy(&deviceInfoArray[i + 1], deviceInfo, sizeof(*deviceInfo));
+            memcpy(&paWasapi->devInfo[i + 1], &paWasapi->devInfo[i], sizeof(*paWasapi->devInfo));
+            
+            i++;
+            deviceInfo = &deviceInfoArray[i];
+            
+            deviceInfo->maxInputChannels = deviceInfo->maxOutputChannels;
+            deviceInfo->defaultHighInputLatency = deviceInfo->defaultHighOutputLatency;
+            deviceInfo->defaultLowInputLatency = deviceInfo->defaultLowOutputLatency;
+            deviceInfo->maxOutputChannels = 0;
+            deviceInfo->defaultHighOutputLatency = 0;
+            deviceInfo->defaultLowOutputLatency = 0;
+            PA_DEBUG(("WASAPI:%d| def.SR[%d] max.CH[%d] latency{hi[%f] lo[%f]}\n", i, (UINT32)deviceInfo->defaultSampleRate,
+                deviceInfo->maxInputChannels, (float)deviceInfo->defaultHighInputLatency, (float)deviceInfo->defaultLowInputLatency));
+            
+            IMMDevice_AddRef(paWasapi->devInfo[i].device);
+            
+            deviceName = (char*)PaUtil_GroupAllocateMemory(paWasapi->allocations, PA_WASAPI_DEVICE_NAME_LEN + 1);
+            if (deviceName == NULL)
+            {
+                result = paInsufficientMemory;
+                goto error;
+            }
+            _snprintf(deviceName, PA_WASAPI_DEVICE_NAME_LEN - 1, "%s (loopback)", deviceInfo->name);
+            deviceInfo->name = deviceName;
+            
+            hostApi->deviceInfos[i] = deviceInfo;
+            ++hostApi->info.deviceCount;
+        }
     }
 
     // Fill the remaining slots with inactive device info
@@ -2319,9 +2370,16 @@ PaError PaWasapi_Initialize( PaUtilHostApiRepresentation **hostApi, PaHostApiInd
     PaWasapiHostApiRepresentation *paWasapi;
 
 #ifndef PA_WINRT
+    // Fail safely for any Windows version below Windows Vista
+    if (GetWindowsVersion() == WINDOWS_UNKNOWN)
+    {
+        PRINT(("WASAPI: Unsupported Windows version!\n"));
+        return paNoError;
+    }
+
     if (!SetupAVRT())
     {
-        PRINT(("WASAPI: No AVRT! (not VISTA?)\n"));
+        PRINT(("WASAPI: avrt.dll missing! Windows integrity broken?\n"));
         return paNoError;
     }
 #endif
@@ -2349,11 +2407,11 @@ PaError PaWasapi_Initialize( PaUtilHostApiRepresentation **hostApi, PaHostApiInd
 
     // Fill basic interface info
     *hostApi                             = &paWasapi->inheritedHostApiRep;
-    (*hostApi)->info.structVersion         = 1;
-    (*hostApi)->info.type                 = paWASAPI;
-    (*hostApi)->info.name                 = "Windows WASAPI";
+    (*hostApi)->info.structVersion       = 1;
+    (*hostApi)->info.type                = paWASAPI;
+    (*hostApi)->info.name                = "Windows WASAPI";
     (*hostApi)->info.deviceCount         = 0;
-    (*hostApi)->info.defaultInputDevice     = paNoDevice;
+    (*hostApi)->info.defaultInputDevice  = paNoDevice;
     (*hostApi)->info.defaultOutputDevice = paNoDevice;
     (*hostApi)->Terminate                = Terminate;
     (*hostApi)->OpenStream               = OpenStream;
@@ -3301,7 +3359,7 @@ static HRESULT CreateAudioClient(PaWasapiStream *pStream, PaWasapiSubStream *pSu
     if ((params->channelCount == 1) && (pSub->wavex.Format.nChannels == 2))
     {
         // select mixer
-        pSub->monoMixer = GetMonoToStereoMixer(&pSub->wavex, (pInfo->flow == eRender ? MIX_DIR__1TO2 : MIX_DIR__2TO1_L));
+        pSub->monoMixer = GetMonoToStereoMixer(&pSub->wavex, (output ? MIX_DIR__1TO2 : MIX_DIR__2TO1_L));
         if (pSub->monoMixer == NULL)
         {
             (*pa_error) = paInvalidChannelCount;
@@ -3846,6 +3904,9 @@ static PaError OpenStream( struct PaUtilHostApiRepresentation *hostApi,
         if (fullDuplex)
             stream->in.streamFlags = 0; // polling interface is implemented for full-duplex mode also
 
+        if (info->flow == eRender)
+             stream->in.streamFlags |= AUDCLNT_STREAMFLAGS_LOOPBACK;
+        
         // Use built-in PCM converter (channel count and sample rate) if requested
         if ((GetWindowsVersion() >= WINDOWS_7_SERVER2008R2) &&
             (stream->in.shareMode == AUDCLNT_SHAREMODE_SHARED) &&

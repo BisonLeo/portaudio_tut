@@ -13,7 +13,7 @@ message("CMAKE_CURRENT_BINARY_DIR = " ${CMAKE_CURRENT_BINARY_DIR} )
 
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 
-#find_package(portaudio)
+find_package(portaudio)
 add_subdirectory(${CMAKE_SOURCE_DIR}/portaudio_src EXCLUDE_FROM_ALL)
 
 add_executable(pa_devs pa_devs.c)
