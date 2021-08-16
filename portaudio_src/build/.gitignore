@@ -2,6 +2,4 @@
 **/Release
 msvc/Backup/
 msvc/UpgradeLog.htm
-msvc/portaudio.vcxproj
-msvc/portaudio.vcxproj.filters
-msvc/portaudio.vcxproj.user
+
