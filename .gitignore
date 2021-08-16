@@ -1,2 +1,5 @@
-**/build
 **/bld
+**/.vs
+**/CMakeCache.txt
+**/CMakeFiles
+build/*
