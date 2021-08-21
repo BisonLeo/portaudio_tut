@@ -27,19 +27,20 @@ void showInfo(const   PaDeviceInfo* deviceInfo, PaDeviceIndex devIndex);
 
 #define FILE_NAME       "audio_data.raw"
 #define SAMPLE_RATE  (48000)
-#define FRAMES_PER_BUFFER (512)
-
 #define NUM_CHANNELS    (2)
+// for frame callback setting
+#define FRAMES_PER_BUFFER (512)
+// per sample size = NUM_CHANNELS * typesize(SAMPLE)
 #define NUM_WRITES_PER_BUFFER   (4)
 
 
 /* Select sample format. */
-#if 0
+#if 1
 #define PA_SAMPLE_TYPE  paFloat32
 typedef float SAMPLE;
 #define SAMPLE_SILENCE  (0.0f)
 #define PRINTF_S_FORMAT "%.8f"
-#elif 1
+#elif 0
 #define PA_SAMPLE_TYPE  paInt16
 typedef short SAMPLE;
 #define SAMPLE_SILENCE  (0)
@@ -58,7 +59,7 @@ typedef unsigned char SAMPLE;
 
 typedef struct
 {
-    unsigned            frameIndex;
+    unsigned  long      frameIndex;
     int                 threadSyncFlag;
     SAMPLE* ringBufferData;
     PaUtilRingBuffer    ringBuffer;
@@ -93,6 +94,10 @@ static int recordCallback(const void* inputBuffer, void* outputBuffer,
     PaStreamCallbackFlags statusFlags,
     void* userData)
 {
+    static auto currentTime = std::chrono::system_clock::now();
+    auto transformed = currentTime.time_since_epoch().count() / 10000;
+    static auto lastTime = transformed;
+
     paTestData* data = (paTestData*)userData;
     ring_buffer_size_t elementsWriteable = PaUtil_GetRingBufferWriteAvailable(&data->ringBuffer);
     ring_buffer_size_t elementsToWrite = MIN(elementsWriteable, (ring_buffer_size_t)(framesPerBuffer * NUM_CHANNELS));
@@ -105,6 +110,11 @@ static int recordCallback(const void* inputBuffer, void* outputBuffer,
 
     data->frameIndex += PaUtil_WriteRingBuffer(&data->ringBuffer, rptr, elementsToWrite);
 
+    currentTime = std::chrono::system_clock::now();
+    transformed = currentTime.time_since_epoch().count() / 10000;  // in ns
+    fprintf(stdout, "delta: %lld\n", transformed - lastTime);
+    lastTime = transformed;
+
     return paContinue;
 }
 
@@ -115,6 +125,8 @@ static int threadFunctionWriteToRawFile(void* ptr)
 
     /* Mark thread started */
     pData->threadSyncFlag = 0;
+
+
 
     while (1)
     {
@@ -135,8 +147,9 @@ static int threadFunctionWriteToRawFile(void* ptr)
                     fwrite(ptr[i], pData->ringBuffer.elementSizeBytes, sizes[i], pData->file);
                 }
                 PaUtil_AdvanceRingBufferReadIndex(&pData->ringBuffer, elementsRead);
-            }
 
+            }
+            
             if (pData->threadSyncFlag)
             {
                 break;
@@ -219,6 +232,7 @@ void paDemo::startRecord() {
         writeLogA("Could not allocate ring buffer data.\n");
         goto done;
     }
+    globaldata.frameIndex = 0;
 
     if (PaUtil_InitializeRingBuffer(&globaldata.ringBuffer, sizeof(SAMPLE), numSamples, globaldata.ringBufferData) < 0)
     {
@@ -227,7 +241,7 @@ void paDemo::startRecord() {
     }
 
     // TODO: do not use fixed device index
-    PaDeviceIndex touse;
+    PaDeviceIndex touse = paNoDevice;
     if (ui.listFunctions->count() > 0) {
         if (ui.listFunctions->currentRow() != -1) {
             QListWidgetItem* curitem = ui.listFunctions->item(ui.listFunctions->currentRow());
@@ -238,7 +252,7 @@ void paDemo::startRecord() {
         writeLogA("Error: No input device.\n");
         return;
     }
-    inputParameters.device = touse; //Pa_GetDefaultInputDevice(); /* default input device */
+    inputParameters.device = touse; 
     if (inputParameters.device == paNoDevice) {
         writeLogA("Error: No default input device.\n");
         return;
@@ -275,7 +289,8 @@ void paDemo::startRecord() {
     writeLogA("\n=== Now recording to '" FILE_NAME "' until Stop record pressed!! Please speak into the microphone. ===\n");
 
     timer->start(1000);
-
+    ui.btnStartRecord->setEnabled(false);
+    ui.btnStopRecord->setEnabled(true);
 done:
     return;
 }
@@ -290,8 +305,11 @@ paDemo::paDemo(QWidget *parent)
     err = Pa_Initialize();
     if (err != paNoError)
     {
-        printf(L"ERROR: Pa_Initialize returned 0x%x\n", err);
-        
+        printf(L"ERROR: Pa_Initialize returned 0x%x\n", err);   
+    }
+    else {
+        ui.btnStartRecord->setEnabled(true);
+        ui.btnStopRecord->setEnabled(false);
     }
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, QOverload<>::of(&paDemo::updateTimer));
@@ -307,15 +325,18 @@ void paDemo::updateTimer()
 {
     /* Note that the RECORDING part is limited with TIME, not size of the file and/or buffer, so you can
    increase NUM_SECONDS until you run out of disk */
-    writeLogA("index = %d\n", globaldata.frameIndex);
+    writeLogA("recorded %ld samples (%.3f secs)\n", globaldata.frameIndex / NUM_CHANNELS, globaldata.frameIndex*1.0f/NUM_CHANNELS/SAMPLE_RATE);
 }
 
 void paDemo::on_btnStart_clicked()
 {
     // must add /utf-8 compiling option in msvc as this file is saved using encoding of 'utf-8'
     // such as writeLog(L"%s", L"hihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\n");
-    devListMain();
-    writeLogT(L"%s", L"==========================================\n");
+    if (ui.chkPrint->isChecked())
+    {
+        devListMain();
+        writeLogT(L"%s", L"==========================================\n");
+    }
     ShowWSAPI();
 }
 void paDemo::on_btnStartRecord_clicked()
@@ -324,6 +345,7 @@ void paDemo::on_btnStartRecord_clicked()
     // such as writeLog(L"%s", L"hihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\n");
  //   devListMain();
     writeLogT(L"%s", L"============start===============\n");
+
     startRecord();
 }
 void paDemo::on_btnStopRecord_clicked()
@@ -332,7 +354,7 @@ void paDemo::on_btnStopRecord_clicked()
     // must add /utf-8 compiling option in msvc as this file is saved using encoding of 'utf-8'
     // such as writeLog(L"%s", L"hihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\nhihi我\n");
  //   devListMain();
-    writeLogT(L"%s", L"=============stop======================\n");
+    
     timer->stop();
     //    if (err < 0) return;
 
@@ -347,6 +369,7 @@ void paDemo::on_btnStopRecord_clicked()
     fclose(globaldata.file);
     globaldata.file = 0;
 
+    writeLogA("==stopped====%s=====%ld written====\n", FILE_NAME, globaldata.frameIndex* sizeof(SAMPLE));
 done:
     if (globaldata.ringBufferData)       /* Sure it is NULL or valid. */
         PaUtil_FreeMemory(globaldata.ringBufferData);
@@ -357,6 +380,8 @@ done:
         fprintf(stderr, "Error message: %s\n", Pa_GetErrorText(err));
         err = 1;          /* Always return 0 or 1, but no other return codes. */
     }
+    ui.btnStartRecord->setEnabled(true);
+    ui.btnStopRecord->setEnabled(false);
 }
 
 
@@ -397,18 +422,21 @@ int paDemo::ShowWSAPI()
     {
         PaDeviceIndex devId = Pa_HostApiDeviceIndexToDeviceIndex(wasAPIindex, i);
         deviceInfo = Pa_GetDeviceInfo(devId);
-        showInfo(deviceInfo, devId);
+        if (ui.chkPrint->isChecked()) {
+            showInfo(deviceInfo, devId);
+        }
         if (deviceInfo->maxInputChannels > 0) {
             QListWidgetItem *newItem = new QListWidgetItem();
-            newItem->setText(deviceInfo->name);
+            newItem->setText(QString("%1.%2").arg(i).arg(deviceInfo->name));
             newItem->setData(Qt::UserRole, devId);
             ui.listFunctions->insertItem(ui.listFunctions->count(), newItem);
         }
     }
+    return err;
 error:
     Pa_Terminate();
     printf(L"Error number: %d\n", err);
-    printf(L"Error message: %s\n", Pa_GetErrorText(err));
+    writeLogA("Error message: %s\n", Pa_GetErrorText(err));
     return err;
 }
 
