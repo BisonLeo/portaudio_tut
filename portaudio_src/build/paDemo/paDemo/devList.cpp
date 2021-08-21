@@ -13,7 +13,7 @@
 #endif
 
 /*******************************************************************/
-static void PrintSupportedStandardSampleRates(
+void PrintSupportedStandardSampleRates(
     const PaStreamParameters* inputParameters,
     const PaStreamParameters* outputParameters)
 {
@@ -45,6 +45,9 @@ static void PrintSupportedStandardSampleRates(
                 printf(L", %8.2f", standardSampleRates[i]);
                 ++printCount;
             }
+        }
+        else {
+            writeLogA("\tPaError: %d ( %s )\n", err, Pa_GetErrorText(err));
         }
     }
     if (!printCount)
