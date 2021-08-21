@@ -78,7 +78,17 @@
          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
         </property>
        </widget>
-       <widget class="QListView" name="listFunctions"/>
+       <widget class="QListWidget" name="listFunctions"/>
+       <widget class="QPushButton" name="btnStartRecord">
+        <property name="text">
+         <string>Start Record</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="btnStopRecord">
+        <property name="text">
+         <string>Stop Record</string>
+        </property>
+       </widget>
       </widget>
      </widget>
     </item>
@@ -90,7 +100,7 @@
      <x>0</x>
      <y>0</y>
      <width>683</width>
-     <height>26</height>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_File">

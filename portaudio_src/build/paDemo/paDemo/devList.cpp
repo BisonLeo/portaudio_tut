@@ -14,40 +14,53 @@
 
 /*******************************************************************/
 void PrintSupportedStandardSampleRates(
-    const PaStreamParameters* inputParameters,
-    const PaStreamParameters* outputParameters)
+    PaStreamParameters* inputParameters,
+    PaStreamParameters* outputParameters)
 {
     static double standardSampleRates[] = {
         8000.0, 9600.0, 11025.0, 12000.0, 16000.0, 22050.0, 24000.0, 32000.0,
         44100.0, 48000.0, 88200.0, 96000.0, 192000.0, -1 /* negative terminated  list */
     };
-    int     i, printCount;
+    int     i, printCount, j;
     PaError err;
+    int numChannels=0;
 
     printCount = 0;
     for (i = 0; standardSampleRates[i] > 0; i++)
     {
-        err = Pa_IsFormatSupported(inputParameters, outputParameters, standardSampleRates[i]);
-        if (err == paFormatIsSupported)
-        {
-            if (printCount == 0)
-            {
-                printf(L"\t%8.2f", standardSampleRates[i]);
-                printCount = 1;
+        for (j = 0; j < 8; j++) {
+            if (inputParameters != NULL) {
+                inputParameters->channelCount = j;
             }
-            else if (printCount == 4)
-            {
-                printf(L",\n\t%8.2f", standardSampleRates[i]);
-                printCount = 1;
+            if (outputParameters != NULL) {
+                outputParameters->channelCount = j;
             }
-            else
+            err = Pa_IsFormatSupported(inputParameters, outputParameters, standardSampleRates[i]);
+
+            if (err == paFormatIsSupported)
             {
-                printf(L", %8.2f", standardSampleRates[i]);
-                ++printCount;
+                if (inputParameters != NULL) {
+                    numChannels = inputParameters->channelCount;
+                }
+                else if (outputParameters->channelCount != NULL) {
+                    numChannels = outputParameters->channelCount;
+                }
+                if (printCount == 0)
+                {
+                    printf(L"\t%8.2f(%d)", standardSampleRates[i], numChannels);
+                    printCount = 1;
+                }
+                else if (printCount == 4)
+                {
+                    printf(L",\n\t%8.2f(%d)", standardSampleRates[i], numChannels);
+                    printCount = 1;
+                }
+                else
+                {
+                    printf(L", %8.2f(%d)", standardSampleRates[i], numChannels);
+                    ++printCount;
+                }
             }
-        }
-        else {
-            writeLogA("\tPaError: %d ( %s )\n", err, Pa_GetErrorText(err));
         }
     }
     if (!printCount)
