@@ -1,0 +1,11 @@
+prefix=C:/portaudio_tut/fftw_install
+exec_prefix=C:/portaudio_tut/fftw_install
+libdir=C:/portaudio_tut/fftw_install/lib
+includedir=C:/portaudio_tut/fftw_install/include
+
+Name: FFTW
+Description: fast Fourier transform library
+Version: 3.3.9
+Libs: -L${libdir} -lfftw3 
+Libs.private: -lm
+Cflags: -I${includedir}

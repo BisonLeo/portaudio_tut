@@ -2,4 +2,9 @@
 **/.vs
 **/CMakeCache.txt
 **/CMakeFiles
+*.tar.*
 build/*
+fftw-3.3.9
+libsndfile
+libsndfile_x64
+libsamplerate-0.1.9
