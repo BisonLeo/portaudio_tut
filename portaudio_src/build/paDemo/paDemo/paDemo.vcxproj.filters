@@ -49,5 +49,16 @@
     <ClCompile Include="pa_ringbuffer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="aws-run.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="aws_transcribe.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="audio_format.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

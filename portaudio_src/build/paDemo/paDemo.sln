@@ -20,10 +20,12 @@ Global
 		ReleaseMinDependency|x86 = ReleaseMinDependency|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{FE75A2BE-325B-4897-844B-344809455BC2}.Debug|x64.ActiveCfg = Debug|Win32
+		{FE75A2BE-325B-4897-844B-344809455BC2}.Debug|x64.ActiveCfg = Debug|x64
+		{FE75A2BE-325B-4897-844B-344809455BC2}.Debug|x64.Build.0 = Debug|x64
 		{FE75A2BE-325B-4897-844B-344809455BC2}.Debug|x86.ActiveCfg = Debug|Win32
 		{FE75A2BE-325B-4897-844B-344809455BC2}.Debug|x86.Build.0 = Debug|Win32
-		{FE75A2BE-325B-4897-844B-344809455BC2}.Release|x64.ActiveCfg = Release|Win32
+		{FE75A2BE-325B-4897-844B-344809455BC2}.Release|x64.ActiveCfg = Release|x64
+		{FE75A2BE-325B-4897-844B-344809455BC2}.Release|x64.Build.0 = Release|x64
 		{FE75A2BE-325B-4897-844B-344809455BC2}.Release|x86.ActiveCfg = Release|Win32
 		{FE75A2BE-325B-4897-844B-344809455BC2}.Release|x86.Build.0 = Release|Win32
 		{FE75A2BE-325B-4897-844B-344809455BC2}.ReleaseMinDependency|x64.ActiveCfg = Debug|Win32
