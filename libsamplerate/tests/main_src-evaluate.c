@@ -70,7 +70,7 @@ static const char* get_machine_details (void) ;
 static char	version_string [512] ;
 
 int
-main (int argc, char *argv [])
+main_disabled (int argc, char *argv [])
 {	static RESAMPLE_PROG resample_progs [] =
 	{	{	"sndfile-resample",
 			"examples/sndfile-resample --version",
